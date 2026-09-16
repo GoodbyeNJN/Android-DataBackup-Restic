@@ -71,12 +71,16 @@ class IndexViewModel @Inject constructor(
     suspend fun updateFTPEntity(
         name: String, remote: String, url: String,
         username: String, password: String, port: String,
-        resticPassword: String = "",          // 新增：账户级 restic 仓库密码
+        resticPassword: String = "",
+        resticPasswordConfigured: Boolean = false,
+        resticInitialized: Boolean = false,
     ) {
         val extra = GsonUtil().toJson(
             FTPExtra(
                 port = port.toIntOrNull() ?: 21,
-                resticPassword = resticPassword, // 新增
+                resticPassword = resticPassword,
+                resticPasswordConfigured = resticPasswordConfigured,
+                resticInitialized = resticInitialized,
             )
         )
         emitIntent(
@@ -96,14 +100,18 @@ class IndexViewModel @Inject constructor(
         name: String, remote: String, url: String,
         username: String, password: String, port: String,
         mode: SFTPAuthMode, privateKey: String,
-        resticPassword: String = "",          // 新增：账户级 restic 仓库密码
+        resticPassword: String = "",
+        resticPasswordConfigured: Boolean = false,
+        resticInitialized: Boolean = false,
     ) {
         val extra = GsonUtil().toJson(
             SFTPExtra(
                 port = port.toIntOrNull() ?: 22,
                 privateKey = privateKey,
                 mode = mode,
-                resticPassword = resticPassword, // 新增
+                resticPassword = resticPassword,
+                resticPasswordConfigured = resticPasswordConfigured,
+                resticInitialized = resticInitialized,
             )
         )
         emitIntent(
@@ -126,14 +134,18 @@ class IndexViewModel @Inject constructor(
         username: String,
         password: String,
         insecure: Boolean,
-        protocol: WebDAVProtocol,               // 新增
-        resticPassword: String = "",            // 新增
+        protocol: WebDAVProtocol,
+        resticPassword: String = "",
+        resticPasswordConfigured: Boolean = false,
+        resticInitialized: Boolean = false,
     ) {
         val extra = GsonUtil().toJson(
             WebDAVExtra(
                 insecure = insecure,
                 protocol = protocol,
                 resticPassword = resticPassword,
+                resticPasswordConfigured = resticPasswordConfigured,
+                resticInitialized = resticInitialized,
             )
         )
         // 入参 url 是"纯主机地址"。先剥离用户可能残留的 scheme，再按协议拼完整 URL 落库。
@@ -161,14 +173,18 @@ class IndexViewModel @Inject constructor(
         region: String, accessKeyId: String, secretAccessKey: String,
         bucket: String, endpoint: String,
         protocol: S3Protocol, networkType: S3NetworkType,
-        resticPassword: String,               // 新增
+        resticPassword: String,
+        resticPasswordConfigured: Boolean = false,
+        resticInitialized: Boolean = false,
     ) {
         val extra = GsonUtil().toJson(
             S3Extra(
                 type = type, region = region, accessKeyId = accessKeyId,
                 secretAccessKey = secretAccessKey, bucket = bucket, endpoint = endpoint,
                 protocol = protocol, networkType = networkType,
-                resticPassword = resticPassword, // 新增
+                resticPassword = resticPassword,
+                resticPasswordConfigured = resticPasswordConfigured,
+                resticInitialized = resticInitialized,
             )
         )
         emitIntent(

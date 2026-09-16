@@ -30,17 +30,20 @@ import com.xayah.core.restic.ResticRepository.ResticProgressCallback
 import com.xayah.core.restic.ResticSnapshot
 import com.xayah.core.datastore.readS3ResticRepoPath
 import com.xayah.core.datastore.readS3ResticPassword
+import com.xayah.core.datastore.readS3ResticPasswordConfigured
 import com.xayah.core.model.DataType
 import com.xayah.core.model.database.S3Extra
 import com.xayah.core.model.util.formatSize
 import com.xayah.core.restic.ResticRepositoryFtp
 import com.xayah.core.model.database.FTPExtra
 import com.xayah.core.datastore.readFtpResticPassword
+import com.xayah.core.datastore.readFtpResticPasswordConfigured
 import com.xayah.core.restic.ResticRepositorySftp
 import com.xayah.core.model.database.SFTPExtra
 import com.xayah.core.restic.ResticRepositoryWebdav
 import com.xayah.core.model.database.WebDAVExtra
 import com.xayah.core.datastore.readWebdavResticPassword
+import com.xayah.core.datastore.readWebdavResticPasswordConfigured
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import dagger.hilt.android.AndroidEntryPoint
@@ -124,22 +127,28 @@ internal class BackupServiceCloudImpl @Inject constructor() : AbstractBackupServ
         val ok = when (entity.type) {
             CloudType.S3 -> {
                 val extra = json.decodeFromString<S3Extra>(entity.extra)
-                val password = extra.resticPassword.ifEmpty { mContext.readS3ResticPassword() ?: getResticPassword() }
+                val password = if (extra.resticPasswordConfigured) extra.resticPassword else extra.resticPassword.ifEmpty {
+                    if (mContext.readS3ResticPasswordConfigured()) (mContext.readS3ResticPassword() ?: "") else (mContext.readS3ResticPassword() ?: getResticPassword())
+                }
                 resticRepoCos.checkCosRepository(entity, password).isSuccess
             }
             CloudType.FTP -> {
                 val extra = json.decodeFromString<FTPExtra>(entity.extra)
-                val password = extra.resticPassword.ifEmpty { mContext.readFtpResticPassword() ?: getResticPassword() }
+                val password = if (extra.resticPasswordConfigured) extra.resticPassword else extra.resticPassword.ifEmpty {
+                    if (mContext.readFtpResticPasswordConfigured()) (mContext.readFtpResticPassword() ?: "") else (mContext.readFtpResticPassword() ?: getResticPassword())
+                }
                 resticRepoFtp.checkFtpRepository(entity, password).isSuccess
             }
             CloudType.WEBDAV -> {
                 val extra = json.decodeFromString<WebDAVExtra>(entity.extra)
-                val password = extra.resticPassword.ifEmpty { mContext.readWebdavResticPassword() ?: getResticPassword() }
+                val password = if (extra.resticPasswordConfigured) extra.resticPassword else extra.resticPassword.ifEmpty {
+                    if (mContext.readWebdavResticPasswordConfigured()) (mContext.readWebdavResticPassword() ?: "") else (mContext.readWebdavResticPassword() ?: getResticPassword())
+                }
                 resticRepoWebdav.checkWebdavRepository(entity, password).isSuccess
             }
             CloudType.SFTP -> {
                 val extra = json.decodeFromString<SFTPExtra>(entity.extra)
-                val password = extra.resticPassword.ifEmpty { getResticPassword() }
+                val password = if (extra.resticPasswordConfigured) extra.resticPassword else extra.resticPassword.ifEmpty { getResticPassword() }
                 resticRepoSftp.checkSftpRepository(entity, password).isSuccess
             }
             else -> true
@@ -362,7 +371,9 @@ internal class BackupServiceCloudImpl @Inject constructor() : AbstractBackupServ
                 remotePath = unifiedRepoPath,
                 filePath = compressedFile.absolutePath,
                 tags = tags,
-                password = s3Extra.resticPassword.ifEmpty { mContext.readS3ResticPassword() ?: getResticPassword() },
+                password = if (s3Extra.resticPasswordConfigured) s3Extra.resticPassword else s3Extra.resticPassword.ifEmpty {
+                    if (mContext.readS3ResticPasswordConfigured()) (mContext.readS3ResticPassword() ?: "") else (mContext.readS3ResticPassword() ?: getResticPassword())
+                },
                 progressCallback = object : ResticProgressCallback {
                     override fun onBackupProgress(
                         percentDone: Float, bytesDone: Long,
@@ -456,7 +467,9 @@ internal class BackupServiceCloudImpl @Inject constructor() : AbstractBackupServ
                 remotePath = unifiedRepoPath,
                 filePath = compressedFile.absolutePath,
                 tags = tags,
-                password = ftpExtra.resticPassword.ifEmpty { mContext.readFtpResticPassword() ?: getResticPassword() },
+                password = if (ftpExtra.resticPasswordConfigured) ftpExtra.resticPassword else ftpExtra.resticPassword.ifEmpty {
+                    if (mContext.readFtpResticPasswordConfigured()) (mContext.readFtpResticPassword() ?: "") else (mContext.readFtpResticPassword() ?: getResticPassword())
+                },
                 progressCallback = object : ResticProgressCallback {
                     override fun onBackupProgress(
                         percentDone: Float, bytesDone: Long,
@@ -543,7 +556,9 @@ internal class BackupServiceCloudImpl @Inject constructor() : AbstractBackupServ
                 remotePath = unifiedRepoPath,
                 filePath = compressedFile.absolutePath,
                 tags = tags,
-                password = webdavExtra.resticPassword.ifEmpty { mContext.readWebdavResticPassword() ?: getResticPassword() },
+                password = if (webdavExtra.resticPasswordConfigured) webdavExtra.resticPassword else webdavExtra.resticPassword.ifEmpty {
+                    if (mContext.readWebdavResticPasswordConfigured()) (mContext.readWebdavResticPassword() ?: "") else (mContext.readWebdavResticPassword() ?: getResticPassword())
+                },
                 progressCallback = object : ResticProgressCallback {
                     override fun onBackupProgress(
                         percentDone: Float, bytesDone: Long,
@@ -630,7 +645,7 @@ internal class BackupServiceCloudImpl @Inject constructor() : AbstractBackupServ
                 remotePath = unifiedRepoPath,
                 filePath = compressedFile.absolutePath,
                 tags = tags,
-                password = sftpExtra.resticPassword.ifEmpty { getResticPassword() },
+                password = if (sftpExtra.resticPasswordConfigured) sftpExtra.resticPassword else sftpExtra.resticPassword.ifEmpty { getResticPassword() },
                 progressCallback = object : ResticProgressCallback {
                     override fun onBackupProgress(
                         percentDone: Float, bytesDone: Long,

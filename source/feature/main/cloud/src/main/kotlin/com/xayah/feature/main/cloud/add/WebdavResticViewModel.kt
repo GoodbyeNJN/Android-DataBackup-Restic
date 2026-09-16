@@ -6,9 +6,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.lifecycle.viewModelScope
 import com.xayah.core.datastore.readWebdavResticInitialized
 import com.xayah.core.datastore.readWebdavResticPassword
+import com.xayah.core.datastore.readWebdavResticPasswordConfigured
 import com.xayah.core.datastore.readWebdavResticRepoPath
 import com.xayah.core.datastore.saveWebdavResticInitialized
 import com.xayah.core.datastore.saveWebdavResticPassword
+import com.xayah.core.datastore.saveWebdavResticPasswordConfigured
 import com.xayah.core.datastore.saveWebdavResticRepoPath
 import com.xayah.core.model.CloudType
 import com.xayah.core.model.database.CloudEntity
@@ -65,9 +67,11 @@ class WebdavResticViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            // 初始化时加载已保存的密码
+            val configured = context.readWebdavResticPasswordConfigured()
             val savedPassword = context.readWebdavResticPassword() ?: ""
-            _webdavPasswordState.value = savedPassword
+            if (configured || savedPassword.isNotEmpty()) {
+                _webdavPasswordState.value = savedPassword
+            }
 
             // 检查初始化状态
             val isInitialized = context.readWebdavResticInitialized()
@@ -92,7 +96,8 @@ class WebdavResticViewModel @Inject constructor(
 
         val webdavExtra = cloudEntity.getExtraEntity<WebDAVExtra>() ?: return
         val savedPassword = webdavExtra.resticPassword
-        if (savedPassword.isNotEmpty()) {
+        val initialized = webdavExtra.resticInitialized || savedPassword.isNotEmpty()
+        if (initialized) {
             _webdavPasswordState.value = savedPassword
             _webdavInitializationState.value = WebdavInitializationState.Success(cloudEntity.remote)
             Log.d(TAG, "已从账户恢复 WebDAV Restic 初始化状态: ${cloudEntity.remote}")
@@ -146,6 +151,7 @@ class WebdavResticViewModel @Inject constructor(
                 if (result.isSuccess) {
                     // 保存配置到DataStore
                     context.saveWebdavResticPassword(password)
+                    context.saveWebdavResticPasswordConfigured(true)
                     context.saveWebdavResticInitialized(true)
                     context.saveWebdavResticRepoPath(remotePath)
 
@@ -184,6 +190,7 @@ class WebdavResticViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 context.saveWebdavResticPassword(password)
+                context.saveWebdavResticPasswordConfigured(true)
                 Log.d(TAG, "WebDAV Restic密码保存成功")
             } catch (e: Exception) {
                 Log.e(TAG, "WebDAV Restic密码保存失败", e)

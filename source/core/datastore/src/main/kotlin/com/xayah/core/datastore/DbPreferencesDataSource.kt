@@ -26,16 +26,19 @@ val KeyResticCompressionLevel = intPreferencesKey("restic_compression_level_int"
 val KeyS3ResticRepoPath = stringPreferencesKey("s3_restic_repo_path")
 val KeyS3ResticPassword = stringPreferencesKey("s3_restic_password")
 val KeyS3ResticInitialized = booleanPreferencesKey("s3_restic_initialized")
+val KeyS3ResticPasswordConfigured = booleanPreferencesKey("s3_restic_password_configured")
 
 // FTP Restic 配置键
 val KeyFtpResticRepoPath = stringPreferencesKey("ftp_restic_repo_path")
 val KeyFtpResticPassword = stringPreferencesKey("ftp_restic_password")
 val KeyFtpResticInitialized = booleanPreferencesKey("ftp_restic_initialized")
+val KeyFtpResticPasswordConfigured = booleanPreferencesKey("ftp_restic_password_configured")
 
 // WebDAV Restic 配置键
 val KeyWebdavResticRepoPath = stringPreferencesKey("webdav_restic_repo_path")
 val KeyWebdavResticPassword = stringPreferencesKey("webdav_restic_password")
 val KeyWebdavResticInitialized = booleanPreferencesKey("webdav_restic_initialized")
+val KeyWebdavResticPasswordConfigured = booleanPreferencesKey("webdav_restic_password_configured")
 
 class DbPreferencesDataSource @Inject constructor(
     private val preferences: DataStore<Preferences>
@@ -83,6 +86,18 @@ suspend fun Context.readS3ResticPassword(): String? {
     }.first()
 }
 
+suspend fun Context.saveS3ResticPasswordConfigured(configured: Boolean) {
+    dataStore.edit { settings ->
+        settings[KeyS3ResticPasswordConfigured] = configured
+    }
+}
+
+suspend fun Context.readS3ResticPasswordConfigured(): Boolean {
+    return dataStore.data.map { preferences ->
+        preferences[KeyS3ResticPasswordConfigured] ?: false
+    }.first()
+}
+
 suspend fun Context.saveS3ResticInitialized(initialized: Boolean) {
     dataStore.edit { settings ->
         settings[KeyS3ResticInitialized] = initialized
@@ -120,6 +135,18 @@ suspend fun Context.readFtpResticPassword(): String? {
     }.first()
 }
 
+suspend fun Context.saveFtpResticPasswordConfigured(configured: Boolean) {
+    dataStore.edit { settings ->
+        settings[KeyFtpResticPasswordConfigured] = configured
+    }
+}
+
+suspend fun Context.readFtpResticPasswordConfigured(): Boolean {
+    return dataStore.data.map { preferences ->
+        preferences[KeyFtpResticPasswordConfigured] ?: false
+    }.first()
+}
+
 suspend fun Context.saveFtpResticInitialized(initialized: Boolean) {
     dataStore.edit { settings ->
         settings[KeyFtpResticInitialized] = initialized
@@ -154,6 +181,18 @@ suspend fun Context.saveWebdavResticPassword(password: String) {
 suspend fun Context.readWebdavResticPassword(): String? {
     return dataStore.data.map { preferences ->
         preferences[KeyWebdavResticPassword]
+    }.first()
+}
+
+suspend fun Context.saveWebdavResticPasswordConfigured(configured: Boolean) {
+    dataStore.edit { settings ->
+        settings[KeyWebdavResticPasswordConfigured] = configured
+    }
+}
+
+suspend fun Context.readWebdavResticPasswordConfigured(): Boolean {
+    return dataStore.data.map { preferences ->
+        preferences[KeyWebdavResticPasswordConfigured] ?: false
     }.first()
 }
 

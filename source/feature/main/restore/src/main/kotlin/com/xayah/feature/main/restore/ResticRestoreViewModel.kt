@@ -93,7 +93,7 @@ class ResticRestoreViewModel @Inject constructor(
             }
             val repoPath = context.readResticRepoPath()
             val password = context.readResticPassword()
-            if (repoPath.isNullOrEmpty() || password.isNullOrEmpty()) {
+            if (repoPath.isNullOrEmpty() || password == null) {
                 Log.e(TAG, "prepareBatchRestore: restic 未配置（repoPath/password 为空）")
                 return@withContext false
             }
@@ -190,8 +190,8 @@ class ResticRestoreViewModel @Inject constructor(
             val repoPath = context.readResticRepoPath()
             val password = context.readResticPassword()
             Log.d("ResticRestore", "读取到的 repoPath: $repoPath")
-            Log.d("ResticRestore", "password: ${if (password.isNullOrEmpty()) "空" else "已设置"}")
-            if (repoPath.isNullOrEmpty() || password.isNullOrEmpty()) {
+            Log.d("ResticRestore", "password: ${if (password == null) "未配置" else "已配置"}")
+            if (repoPath.isNullOrEmpty() || password == null) {
                 _uiState.value = ResticRestoreUiState.Error(context.getString(R.string.restore_error_restic_not_configured))
                 return@launch
             }
@@ -556,7 +556,7 @@ class ResticRestoreViewModel @Inject constructor(
             val password = context.readResticPassword()
             Log.d("ResticRestore", "仓库路径: $repoPath")
 
-            if (repoPath.isNullOrEmpty() || password.isNullOrEmpty()) {
+            if (repoPath.isNullOrEmpty() || password == null) {
                 Log.e("ResticRestore", "Restic 配置不完整")
                 _uiState.value = ResticRestoreUiState.Error("Restic not configured")
                 return false

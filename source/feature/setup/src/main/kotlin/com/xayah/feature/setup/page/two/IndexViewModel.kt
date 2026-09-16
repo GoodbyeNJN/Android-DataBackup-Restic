@@ -91,7 +91,7 @@ class IndexViewModel @Inject constructor(
 
                 // b) Restic 仓库：独立目录 /storage/emulated/0/DataBackupRustic/restic_repo
                 val repoPath = File(ConstantUtil.DEFAULT_RUSTIC_REPO_ROOT, "restic_repo").absolutePath
-                val pwd = password.ifBlank { DEFAULT_RESTIC_PASSWORD }
+                val pwd = password
 
                 _initializationState.value = InitializationState.Initializing
                 createDirWithPermissions(repoPath)

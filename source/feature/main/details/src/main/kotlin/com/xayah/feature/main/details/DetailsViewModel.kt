@@ -347,7 +347,7 @@ class DetailsViewModel @Inject constructor(
                 packageEntity.resticRepoPath?.let { repoPath ->
                     val password = context.readResticPassword()
                     // 检查密码是否为空
-                    if (password.isNullOrEmpty()) {
+                    if (password == null) {
                         Log.e(TAG, "Restic password is null or empty")
                         return@launch
                     }

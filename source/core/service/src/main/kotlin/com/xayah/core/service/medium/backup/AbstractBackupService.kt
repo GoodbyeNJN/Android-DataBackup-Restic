@@ -29,6 +29,7 @@ import com.xayah.core.restic.ResticRepository
 import com.xayah.core.restic.ResticRepository.ResticProgressCallback
 import com.xayah.core.datastore.readResticRepoPath
 import com.xayah.core.datastore.readResticPassword
+import com.xayah.core.datastore.readResticPasswordConfigured
 import dagger.hilt.android.AndroidEntryPoint
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CoroutineScope
@@ -129,7 +130,8 @@ internal abstract class AbstractBackupService : AbstractMediumService() {
 
     // Restic 辅助方法：生成密码
     protected suspend fun getResticPassword(): String {
-        return mContext.readResticPassword() ?: "backup_${mBackupTimestamp}"
+        val configured = mContext.readResticPasswordConfigured()
+        return if (configured) (mContext.readResticPassword() ?: "") else (mContext.readResticPassword() ?: "backup_${mBackupTimestamp}")
     }
 
     // 添加成员变量

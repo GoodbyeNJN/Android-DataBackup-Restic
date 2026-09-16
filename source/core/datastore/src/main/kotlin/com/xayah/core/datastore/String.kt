@@ -1,7 +1,9 @@
 package com.xayah.core.datastore
 
 import android.content.Context
+import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import com.xayah.core.model.CompressionType
 import com.xayah.core.model.KillAppOption
 import com.xayah.core.model.SelectionType
@@ -23,6 +25,7 @@ val KeyKillAppOption = stringPreferencesKey("kill_app_option")
 val KeyLanguage = stringPreferencesKey("language")
 val KeyResticRepoPath = stringPreferencesKey("restic_repo_path")
 val KeyResticPassword = stringPreferencesKey("restic_password")
+val KeyResticPasswordConfigured = booleanPreferencesKey("restic_password_configured")
 
 
 // -----------------------------------------Read-----------------------------------------
@@ -38,7 +41,12 @@ fun Context.readLanguage() = readStoreString(key = KeyLanguage, defValue = Const
 // 修复 1：将 defValue = null 改为 defValue = ""。
 // .first() 后的 .takeIf { it.isNotEmpty() } 将 "" 转换回 null，从而实现 String? 的返回。
 suspend fun Context.readResticRepoPath(): String? = readStoreString(key = KeyResticRepoPath, defValue = "").first().takeIf { it.isNotEmpty() }
-suspend fun Context.readResticPassword(): String? = readStoreString(key = KeyResticPassword, defValue = "").first().takeIf { it.isNotEmpty() }
+suspend fun Context.readResticPassword(): String? = dataStore.data.map { preferences ->
+    if (preferences.contains(KeyResticPassword)) preferences[KeyResticPassword] else null
+}.first()
+suspend fun Context.readResticPasswordConfigured(): Boolean = dataStore.data.map { preferences ->
+    preferences[KeyResticPasswordConfigured] ?: false
+}.first()
 suspend fun Context.readLoadedIconMD5(accountId: String): String = readStoreString(key = keyLoadedIconMD5(accountId), defValue = "").first()
 /**
  * The final path for saving the backup.
@@ -61,4 +69,10 @@ suspend fun Context.saveCustomSUFile(value: String) = saveStoreString(key = KeyC
 suspend fun Context.saveKillAppOption(value: KillAppOption) = saveStoreString(key = KeyKillAppOption, value = value.name.trim())
 suspend fun Context.saveLanguage(value: String) = saveStoreString(key = KeyLanguage, value = value.trim())
 suspend fun Context.saveResticRepoPath(value: String) = saveStoreString(key = KeyResticRepoPath, value = value)
-suspend fun Context.saveResticPassword(value: String) = saveStoreString(key = KeyResticPassword, value = value)
+suspend fun Context.saveResticPassword(value: String) {
+    saveStoreString(key = KeyResticPassword, value = value)
+    dataStore.edit { settings -> settings[KeyResticPasswordConfigured] = true }
+}
+suspend fun Context.saveResticPasswordConfigured(configured: Boolean) {
+    dataStore.edit { settings -> settings[KeyResticPasswordConfigured] = configured }
+}

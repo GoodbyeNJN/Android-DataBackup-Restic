@@ -5,6 +5,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
@@ -84,6 +86,8 @@ fun PageWebDAVSetup() {
     val deleteAccountDescText = stringResource(id = R.string.delete_account_desc)
     val nonPublicCaUnsupportedText = stringResource(id = R.string.webdav_https_non_public_ca_unsupported)
     val repositoryCheckFailedText = stringResource(id = R.string.repository_check_failed)
+    val noPasswordInitTitle = stringResource(id = R.string.restic_no_password_init)
+    val noPasswordInitWarning = stringResource(id = R.string.restic_no_password_warning)
     val navController = LocalNavController.current!!
     val viewModel = hiltViewModel<IndexViewModel>()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -94,6 +98,7 @@ fun PageWebDAVSetup() {
     val scope = rememberCoroutineScope()
 
     var webdavPassword by rememberSaveable { mutableStateOf("") }
+    var webdavUseNoPassword by rememberSaveable(uiState.cloudEntity) { mutableStateOf(false) }
     var webdavPasswordVisible by rememberSaveable { mutableStateOf(false) }
 
     val webdavInitState by webdavViewModel.webdavInitializationState.collectAsStateWithLifecycle()
@@ -152,6 +157,8 @@ fun PageWebDAVSetup() {
     LaunchedEffect(uiState.cloudEntity) {
         uiState.cloudEntity?.let { entity ->
             webdavViewModel.restoreStateFromEntity(entity)
+            val extra = entity.getExtraEntity<WebDAVExtra>()
+            webdavUseNoPassword = extra?.resticPasswordConfigured == true && extra.resticPassword.isEmpty()
         }
     }
 
@@ -189,7 +196,9 @@ fun PageWebDAVSetup() {
                             name = name, remote = remote, url = url,
                             username = username, password = password, insecure = false,
                             protocol = if (protocolIndex == 0) WebDAVProtocol.HTTPS else WebDAVProtocol.HTTP,
-                            resticPassword = webdavPassword,
+                            resticPassword = if (webdavUseNoPassword) "" else webdavPassword,
+                            resticPasswordConfigured = true,
+                            resticInitialized = webdavInitState is WebdavResticViewModel.WebdavInitializationState.Success,
                         )
                         viewModel.emitIntent(IndexUiIntent.TestConnection)
                     }
@@ -207,10 +216,13 @@ fun PageWebDAVSetup() {
                             name = name, remote = remote, url = url,
                             username = username, password = password, insecure = false,
                             protocol = if (protocolIndex == 0) WebDAVProtocol.HTTPS else WebDAVProtocol.HTTP,
-                            resticPassword = webdavPassword,
+                            resticPassword = if (webdavUseNoPassword) "" else webdavPassword,
+                            resticPasswordConfigured = true,
+                            resticInitialized = webdavInitState is WebdavResticViewModel.WebdavInitializationState.Success,
                         )
                         val entity = uiState.cloudEntity
-                        val ok = entity != null && webdavViewModel.checkWebdavRepository(entity, webdavPassword)
+                        val effectivePassword = if (webdavUseNoPassword) "" else webdavPassword
+                        val ok = entity != null && webdavViewModel.checkWebdavRepository(entity, effectivePassword)
                         if (!ok) {
                             viewModel.emitEffect(IndexUiEffect.ShowSnackbar(
                                 message = repositoryCheckFailedText, type = SnackbarType.Error))
@@ -335,7 +347,9 @@ fun PageWebDAVSetup() {
                             name = name, remote = remote, url = url,
                             username = username, password = password, insecure = false,
                             protocol = if (protocolIndex == 0) WebDAVProtocol.HTTPS else WebDAVProtocol.HTTP,
-                            resticPassword = webdavPassword,
+                            resticPassword = if (webdavUseNoPassword) "" else webdavPassword,
+                            resticPasswordConfigured = true,
+                            resticInitialized = webdavInitState is WebdavResticViewModel.WebdavInitializationState.Success,
                         )
                         viewModel.emitIntent(IndexUiIntent.SetRemotePath(context = context))
                         remote = uiState.cloudEntity!!.remote
@@ -373,8 +387,8 @@ fun PageWebDAVSetup() {
                     modifier = Modifier
                         .fillMaxWidth()
                         .paddingHorizontal(SizeTokens.Level24),
-                    enabled = uiState.isProcessing.not(),
-                    value = webdavPassword,
+                    enabled = uiState.isProcessing.not() && webdavUseNoPassword.not(),
+                    value = if (webdavUseNoPassword) "" else webdavPassword,
                     visualTransformation = if (webdavPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     leadingIcon = ImageVector.vectorResource(id = R.drawable.ic_rounded_key),
                     trailingIcon = if (webdavPasswordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
@@ -388,6 +402,31 @@ fun PageWebDAVSetup() {
                     },
                     label = stringResource(id = R.string.s3_restic_password)
                 )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .paddingHorizontal(SizeTokens.Level24),
+                ) {
+                    Checkbox(
+                        checked = webdavUseNoPassword,
+                        onCheckedChange = { checked ->
+                            webdavUseNoPassword = checked
+                            if (checked) {
+                                webdavPassword = ""
+                                webdavViewModel.saveWebdavPassword("")
+                            }
+                        },
+                        enabled = uiState.isProcessing.not()
+                    )
+                    Text(text = noPasswordInitTitle)
+                }
+                if (webdavUseNoPassword) {
+                    Text(
+                        modifier = Modifier.paddingHorizontal(SizeTokens.Level24),
+                        text = noPasswordInitWarning,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
 
                 // 初始化状态显示
                 val initStatus = when (val state = webdavInitState) {
@@ -412,8 +451,9 @@ fun PageWebDAVSetup() {
                     title = stringResource(id = R.string.s3_restic_init_status),
                     value = initStatus,
                     onClick = {
-                        if (webdavInitState is WebdavResticViewModel.WebdavInitializationState.Idle && webdavPassword.isNotEmpty()) {
+                        if (webdavInitState is WebdavResticViewModel.WebdavInitializationState.Idle) {
                             scope.launch {
+                                if (webdavUseNoPassword && !dialogState.confirm(title = noPasswordInitTitle, text = noPasswordInitWarning)) return@launch
                                 val cleanHost = url.trim()
                                     .removePrefix("https://")
                                     .removePrefix("http://")
@@ -428,7 +468,7 @@ fun PageWebDAVSetup() {
                                     insecure = insecure,
                                     protocol = if (protocolIndex == 0) WebDAVProtocol.HTTPS else WebDAVProtocol.HTTP,
                                     remotePath = remote,
-                                    password = webdavPassword
+                                    password = if (webdavUseNoPassword) "" else webdavPassword
                                 )
                             }
                         }
@@ -441,10 +481,10 @@ fun PageWebDAVSetup() {
                         .fillMaxWidth()
                         .paddingHorizontal(SizeTokens.Level24),
                     enabled = uiState.isProcessing.not() &&
-                            webdavPassword.isNotEmpty() &&
                             webdavInitState !is WebdavResticViewModel.WebdavInitializationState.Initializing,
                     onClick = {
                         scope.launch {
+                            if (webdavUseNoPassword && !dialogState.confirm(title = noPasswordInitTitle, text = noPasswordInitWarning)) return@launch
                             val cleanHost = url.trim()
                                 .removePrefix("https://")
                                 .removePrefix("http://")
@@ -459,7 +499,7 @@ fun PageWebDAVSetup() {
                                 insecure = insecure,
                                 protocol = if (protocolIndex == 0) WebDAVProtocol.HTTPS else WebDAVProtocol.HTTP,
                                 remotePath = remote,
-                                password = webdavPassword
+                                password = if (webdavUseNoPassword) "" else webdavPassword
                             )
                         }
                     }

@@ -6,9 +6,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.lifecycle.viewModelScope
 import com.xayah.core.datastore.readS3ResticInitialized
 import com.xayah.core.datastore.readS3ResticPassword
+import com.xayah.core.datastore.readS3ResticPasswordConfigured
 import com.xayah.core.datastore.readS3ResticRepoPath
 import com.xayah.core.datastore.saveS3ResticInitialized
 import com.xayah.core.datastore.saveS3ResticPassword
+import com.xayah.core.datastore.saveS3ResticPasswordConfigured
 import com.xayah.core.datastore.saveS3ResticRepoPath
 import com.xayah.core.model.database.S3Extra
 import com.xayah.core.model.database.S3NetworkType
@@ -65,9 +67,11 @@ class S3ResticViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            // 初始化时加载已保存的密码
+            val configured = context.readS3ResticPasswordConfigured()
             val savedPassword = context.readS3ResticPassword() ?: ""
-            _s3PasswordState.value = savedPassword
+            if (configured || savedPassword.isNotEmpty()) {
+                _s3PasswordState.value = savedPassword
+            }
 
             // 检查初始化状态
             val isInitialized = context.readS3ResticInitialized()
@@ -92,7 +96,8 @@ class S3ResticViewModel @Inject constructor(
 
         val s3Extra = cloudEntity.getExtraEntity<S3Extra>() ?: return
         val savedPassword = s3Extra.resticPassword
-        if (savedPassword.isNotEmpty()) {
+        val initialized = s3Extra.resticInitialized || savedPassword.isNotEmpty()
+        if (initialized) {
             _s3PasswordState.value = savedPassword
             _s3InitializationState.value = S3InitializationState.Success(cloudEntity.remote)
             Log.d(TAG, "已从账户恢复 S3 Restic 初始化状态: ${cloudEntity.remote}")
@@ -121,6 +126,7 @@ class S3ResticViewModel @Inject constructor(
                 if (result.isSuccess) {
                     // 保存配置到DataStore
                     context.saveS3ResticPassword(password)
+                    context.saveS3ResticPasswordConfigured(true)
                     context.saveS3ResticInitialized(true)
                     context.saveS3ResticRepoPath(remotePath)
 
@@ -153,6 +159,7 @@ class S3ResticViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 context.saveS3ResticPassword(password)
+                context.saveS3ResticPasswordConfigured(true)
                 Log.d(TAG, "S3 Restic密码保存成功")
             } catch (e: Exception) {
                 Log.e(TAG, "S3 Restic密码保存失败", e)

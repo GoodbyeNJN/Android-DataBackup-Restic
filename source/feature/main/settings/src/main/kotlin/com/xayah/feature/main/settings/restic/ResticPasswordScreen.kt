@@ -29,11 +29,13 @@ fun ResticPasswordScreen() {
 
     // 本地编辑状态
     var password by remember { mutableStateOf("") }
+    var useNoPassword by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) }
 
     // 初始化时加载已有密码
     LaunchedEffect(Unit) {
         password = viewModel.getPassword()
+        useNoPassword = password.isEmpty()
     }
 
     Scaffold(
@@ -48,8 +50,7 @@ fun ResticPasswordScreen() {
                 actions = {
                     TextButton(
                         onClick = {
-                            // 核心修复：移除 context 参数，仅传递字符串
-                            viewModel.savePassword(password)
+                            viewModel.savePassword(if (useNoPassword) "" else password)
                             navController.navigateUp()
                         }
                     ) {
@@ -68,12 +69,13 @@ fun ResticPasswordScreen() {
         ) {
             // 密码输入框
             OutlinedTextField(
-                value = password,
+                value = if (useNoPassword) "" else password,
                 onValueChange = { password = it },
                 label = { Text(stringResource(id = R.string.restic_password)) },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                enabled = !useNoPassword,
                 trailingIcon = {
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
                         Icon(
@@ -84,6 +86,18 @@ fun ResticPasswordScreen() {
                 },
                 singleLine = true
             )
+            Row(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Checkbox(
+                    checked = useNoPassword,
+                    onCheckedChange = { checked ->
+                        useNoPassword = checked
+                        if (checked) password = ""
+                    }
+                )
+                Text(text = stringResource(id = R.string.restic_no_password_init))
+            }
 
             // 描述文本
             Text(
@@ -91,6 +105,13 @@ fun ResticPasswordScreen() {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (useNoPassword) {
+                Text(
+                    text = stringResource(id = R.string.restic_no_password_warning),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
         }
     }
 }

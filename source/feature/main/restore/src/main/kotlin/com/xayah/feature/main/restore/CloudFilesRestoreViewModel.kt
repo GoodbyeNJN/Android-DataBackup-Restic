@@ -9,8 +9,11 @@ import com.xayah.core.data.repository.CloudRepository
 import com.xayah.core.data.repository.FilesRepo
 import com.xayah.core.datastore.readBackupDirectory
 import com.xayah.core.datastore.readS3ResticPassword
+import com.xayah.core.datastore.readS3ResticPasswordConfigured
 import com.xayah.core.datastore.readFtpResticPassword
+import com.xayah.core.datastore.readFtpResticPasswordConfigured
 import com.xayah.core.datastore.readWebdavResticPassword
+import com.xayah.core.datastore.readWebdavResticPasswordConfigured
 import com.xayah.core.model.DataType
 import com.xayah.core.model.CloudType
 import com.xayah.core.model.OpType
@@ -78,19 +81,34 @@ class CloudFilesRestoreViewModel @Inject constructor(
         return when (cloudEntity.type) {
             CloudType.FTP -> {
                 val ftpExtra = runCatching { json.decodeFromString<FTPExtra>(cloudEntity.extra) }.getOrNull()
-                ftpExtra?.resticPassword?.takeIf { it.isNotEmpty() } ?: context.readFtpResticPassword()
+                when {
+                    ftpExtra?.resticPasswordConfigured == true -> ftpExtra.resticPassword
+                    context.readFtpResticPasswordConfigured() -> context.readFtpResticPassword() ?: ""
+                    else -> ftpExtra?.resticPassword?.takeIf { it.isNotEmpty() } ?: context.readFtpResticPassword()
+                }
             }
             CloudType.WEBDAV -> {                                                                     // 新增
                 val webdavExtra = runCatching { json.decodeFromString<WebDAVExtra>(cloudEntity.extra) }.getOrNull()
-                webdavExtra?.resticPassword?.takeIf { it.isNotEmpty() } ?: context.readWebdavResticPassword()
+                when {
+                    webdavExtra?.resticPasswordConfigured == true -> webdavExtra.resticPassword
+                    context.readWebdavResticPasswordConfigured() -> context.readWebdavResticPassword() ?: ""
+                    else -> webdavExtra?.resticPassword?.takeIf { it.isNotEmpty() } ?: context.readWebdavResticPassword()
+                }
             }
             CloudType.SFTP -> {
                 val sftpExtra = runCatching { json.decodeFromString<SFTPExtra>(cloudEntity.extra) }.getOrNull()
-                sftpExtra?.resticPassword?.takeIf { it.isNotEmpty() }
+                when {
+                    sftpExtra?.resticPasswordConfigured == true -> sftpExtra.resticPassword
+                    else -> sftpExtra?.resticPassword?.takeIf { it.isNotEmpty() }
+                }
             }
             else -> {
                 val s3Extra = runCatching { json.decodeFromString<S3Extra>(cloudEntity.extra) }.getOrNull()
-                s3Extra?.resticPassword?.takeIf { it.isNotEmpty() } ?: context.readS3ResticPassword()
+                when {
+                    s3Extra?.resticPasswordConfigured == true -> s3Extra.resticPassword
+                    context.readS3ResticPasswordConfigured() -> context.readS3ResticPassword() ?: ""
+                    else -> s3Extra?.resticPassword?.takeIf { it.isNotEmpty() } ?: context.readS3ResticPassword()
+                }
             }
         }
     }
@@ -134,7 +152,7 @@ class CloudFilesRestoreViewModel @Inject constructor(
             try {
                 Log.d(TAG, "读取 Restic 密码配置")
                 val password = resolveResticPassword(cloudEntity)
-                if (password.isNullOrEmpty()) {
+                if (password == null) {
                     Log.e(TAG, "Restic密码未配置或为空")
                     _uiState.value = CloudFilesRestoreUiState.Error(context.getString(R.string.restore_password_not_configured))
                     return@launch
@@ -278,7 +296,7 @@ class CloudFilesRestoreViewModel @Inject constructor(
                 // === 改动 1：密码解析按 CloudType 分派（FTP/S3 账户级 -> DataStore 回落）===
                 Log.d(TAG, "读取 Restic 密码")
                 val password = resolveResticPassword(cloudEntity)
-                if (password.isNullOrEmpty()) {
+                if (password == null) {
                     Log.e(TAG, "Restic密码为空")
                     return@withContext false
                 }

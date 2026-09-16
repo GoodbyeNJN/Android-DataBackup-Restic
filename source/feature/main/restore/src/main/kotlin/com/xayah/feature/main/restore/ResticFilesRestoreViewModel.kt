@@ -70,7 +70,7 @@ class ResticFilesRestoreViewModel @Inject constructor(
             val password = context.readResticPassword()
             Log.d("ResticFilesRestore", "仓库路径: $repoPath")
 
-            if (repoPath.isNullOrEmpty() || password.isNullOrEmpty()) {
+            if (repoPath.isNullOrEmpty() || password == null) {
                 Log.e("ResticFilesRestore", "Restic 配置不完整")
                 return false
             }
@@ -391,7 +391,7 @@ class ResticFilesRestoreViewModel @Inject constructor(
                 val repoPath = context.readResticRepoPath()
                 val password = context.readResticPassword()
 
-                if (repoPath.isNullOrEmpty() || password.isNullOrEmpty()) {
+                if (repoPath.isNullOrEmpty() || password == null) {
                     Log.e("ResticFilesRestore", "Restic配置不完整")
                     _uiState.value = ResticFilesRestoreUiState.Error(context.getString(R.string.restore_error_restic_not_configured))
                     return@launch

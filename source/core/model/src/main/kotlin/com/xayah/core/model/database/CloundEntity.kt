@@ -10,6 +10,8 @@ import kotlinx.serialization.Serializable
 data class FTPExtra(
     val port: Int,
     val resticPassword: String = "",   // 新增：按账户存储的 restic 仓库密码
+    val resticPasswordConfigured: Boolean = false,
+    val resticInitialized: Boolean = false,
 )
 
 @Serializable
@@ -18,6 +20,8 @@ data class SFTPExtra(
     val privateKey: String,
     val mode: SFTPAuthMode = SFTPAuthMode.PASSWORD,
     val resticPassword: String = "",   // 新增：按账户存储的 restic 仓库密码
+    val resticPasswordConfigured: Boolean = false,
+    val resticInitialized: Boolean = false,
 )
 
 @Serializable
@@ -25,6 +29,8 @@ data class WebDAVExtra(
     val insecure: Boolean,
     val protocol: WebDAVProtocol = WebDAVProtocol.HTTPS,
     val resticPassword: String = "",   // 新增：按账户存储的 restic 仓库密码
+    val resticPasswordConfigured: Boolean = false,
+    val resticInitialized: Boolean = false,
 )
 
 @Serializable
@@ -38,6 +44,8 @@ data class S3Extra(
     val protocol: S3Protocol = S3Protocol.HTTPS,
     val networkType: S3NetworkType = S3NetworkType.PUBLIC,
     val resticPassword: String = "",   // 新增：按账户存储的 restic 仓库密码
+    val resticPasswordConfigured: Boolean = false,
+    val resticInitialized: Boolean = false,
 )
 
 enum class S3Protocol {

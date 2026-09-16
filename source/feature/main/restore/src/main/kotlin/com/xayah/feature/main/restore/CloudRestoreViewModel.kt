@@ -9,8 +9,11 @@ import com.xayah.core.data.repository.CloudRepository
 import com.xayah.core.datastore.readBackupDirectory
 import com.xayah.core.datastore.readResticPassword
 import com.xayah.core.datastore.readS3ResticPassword
+import com.xayah.core.datastore.readS3ResticPasswordConfigured
 import com.xayah.core.datastore.readFtpResticPassword
+import com.xayah.core.datastore.readFtpResticPasswordConfigured
 import com.xayah.core.datastore.readWebdavResticPassword
+import com.xayah.core.datastore.readWebdavResticPasswordConfigured
 import com.xayah.core.model.DataType
 import com.xayah.core.model.OpType
 import com.xayah.core.model.ResticProgressState
@@ -99,7 +102,7 @@ class CloudRestoreViewModel @Inject constructor(
                 return@withContext false
             }
             val password = resolveResticPassword(cloudEntity)
-            if (password.isNullOrEmpty()) {
+            if (password == null) {
                 Log.e(TAG, "prepareBatchRestore: restic 密码未配置")
                 return@withContext false
             }
@@ -237,19 +240,34 @@ class CloudRestoreViewModel @Inject constructor(
         return when (cloudEntity.type) {
             CloudType.FTP -> {
                 val ftpExtra = runCatching { json.decodeFromString<FTPExtra>(cloudEntity.extra) }.getOrNull()
-                ftpExtra?.resticPassword?.takeIf { it.isNotEmpty() } ?: context.readFtpResticPassword()
+                when {
+                    ftpExtra?.resticPasswordConfigured == true -> ftpExtra.resticPassword
+                    context.readFtpResticPasswordConfigured() -> context.readFtpResticPassword() ?: ""
+                    else -> ftpExtra?.resticPassword?.takeIf { it.isNotEmpty() } ?: context.readFtpResticPassword()
+                }
             }
             CloudType.WEBDAV -> {
                 val webdavExtra = runCatching { json.decodeFromString<WebDAVExtra>(cloudEntity.extra) }.getOrNull()
-                webdavExtra?.resticPassword?.takeIf { it.isNotEmpty() } ?: context.readWebdavResticPassword()
+                when {
+                    webdavExtra?.resticPasswordConfigured == true -> webdavExtra.resticPassword
+                    context.readWebdavResticPasswordConfigured() -> context.readWebdavResticPassword() ?: ""
+                    else -> webdavExtra?.resticPassword?.takeIf { it.isNotEmpty() } ?: context.readWebdavResticPassword()
+                }
             }
             CloudType.SFTP -> {
                 val sftpExtra = runCatching { json.decodeFromString<SFTPExtra>(cloudEntity.extra) }.getOrNull()
-                sftpExtra?.resticPassword?.takeIf { it.isNotEmpty() }
+                when {
+                    sftpExtra?.resticPasswordConfigured == true -> sftpExtra.resticPassword
+                    else -> sftpExtra?.resticPassword?.takeIf { it.isNotEmpty() }
+                }
             }
             else -> {
                 val s3Extra = runCatching { json.decodeFromString<S3Extra>(cloudEntity.extra) }.getOrNull()
-                s3Extra?.resticPassword?.takeIf { it.isNotEmpty() } ?: context.readS3ResticPassword()
+                when {
+                    s3Extra?.resticPasswordConfigured == true -> s3Extra.resticPassword
+                    context.readS3ResticPasswordConfigured() -> context.readS3ResticPassword() ?: ""
+                    else -> s3Extra?.resticPassword?.takeIf { it.isNotEmpty() } ?: context.readS3ResticPassword()
+                }
             }
         }
     }
@@ -282,7 +300,7 @@ class CloudRestoreViewModel @Inject constructor(
         }
         viewModelScope.launch {
             val password = resolveResticPassword(cloudEntity)
-            if (password.isNullOrEmpty()) {
+            if (password == null) {
                 _uiState.value = CloudRestoreUiState.Error(context.getString(R.string.restore_password_not_configured))
                 return@launch
             }

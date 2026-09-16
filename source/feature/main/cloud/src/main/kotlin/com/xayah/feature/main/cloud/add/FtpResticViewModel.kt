@@ -6,9 +6,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.lifecycle.viewModelScope
 import com.xayah.core.datastore.readFtpResticInitialized
 import com.xayah.core.datastore.readFtpResticPassword
+import com.xayah.core.datastore.readFtpResticPasswordConfigured
 import com.xayah.core.datastore.readFtpResticRepoPath
 import com.xayah.core.datastore.saveFtpResticInitialized
 import com.xayah.core.datastore.saveFtpResticPassword
+import com.xayah.core.datastore.saveFtpResticPasswordConfigured
 import com.xayah.core.datastore.saveFtpResticRepoPath
 import com.xayah.core.model.CloudType
 import com.xayah.core.model.database.CloudEntity
@@ -64,9 +66,11 @@ class FtpResticViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            // 初始化时加载已保存的密码
+            val configured = context.readFtpResticPasswordConfigured()
             val savedPassword = context.readFtpResticPassword() ?: ""
-            _ftpPasswordState.value = savedPassword
+            if (configured || savedPassword.isNotEmpty()) {
+                _ftpPasswordState.value = savedPassword
+            }
 
             // 检查初始化状态
             val isInitialized = context.readFtpResticInitialized()
@@ -91,7 +95,8 @@ class FtpResticViewModel @Inject constructor(
 
         val ftpExtra = cloudEntity.getExtraEntity<FTPExtra>() ?: return
         val savedPassword = ftpExtra.resticPassword
-        if (savedPassword.isNotEmpty()) {
+        val initialized = ftpExtra.resticInitialized || savedPassword.isNotEmpty()
+        if (initialized) {
             _ftpPasswordState.value = savedPassword
             _ftpInitializationState.value = FtpInitializationState.Success(cloudEntity.remote)
             Log.d(TAG, "已从账户恢复 FTP Restic 初始化状态: ${cloudEntity.remote}")
@@ -141,6 +146,7 @@ class FtpResticViewModel @Inject constructor(
                 if (result.isSuccess) {
                     // 保存配置到DataStore
                     context.saveFtpResticPassword(password)
+                    context.saveFtpResticPasswordConfigured(true)
                     context.saveFtpResticInitialized(true)
                     context.saveFtpResticRepoPath(remotePath)
 
@@ -173,6 +179,7 @@ class FtpResticViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 context.saveFtpResticPassword(password)
+                context.saveFtpResticPasswordConfigured(true)
                 Log.d(TAG, "FTP Restic密码保存成功")
             } catch (e: Exception) {
                 Log.e(TAG, "FTP Restic密码保存失败", e)
