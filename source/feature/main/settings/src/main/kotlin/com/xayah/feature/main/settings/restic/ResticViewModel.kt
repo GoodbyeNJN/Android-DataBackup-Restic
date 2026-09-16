@@ -7,8 +7,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.lifecycle.viewModelScope
 import com.topjohnwu.superuser.Shell
 import com.xayah.core.datastore.readResticPassword
+import com.xayah.core.datastore.readResticPasswordConfigured
 import com.xayah.core.datastore.readResticRepoPath
 import com.xayah.core.datastore.saveResticPassword
+import com.xayah.core.datastore.saveResticPasswordConfigured
 import com.xayah.core.datastore.saveResticRepoPath
 import com.xayah.core.model.restic.ResticBackupApp
 import com.xayah.core.restic.ResticNative
@@ -286,6 +288,7 @@ class ResticViewModel @Inject constructor(
         viewModelScope.launch {
             context.saveResticRepoPath("")
             context.saveResticPassword("")
+            context.saveResticPasswordConfigured(false)
             _repoPathState.value = ""
             _resticInitializedState.value = false
             _resticSnapshotCountState.value = 0
@@ -306,7 +309,11 @@ class ResticViewModel @Inject constructor(
     }
 
     private suspend fun getResticPassword(): String {
-        return context.readResticPassword() ?: "databackup_default"
+        val configured = context.readResticPasswordConfigured()
+        return when {
+            configured -> context.readResticPassword() ?: ""
+            else -> context.readResticPassword() ?: "databackup_default"
+        }
     }
 
     override suspend fun onEvent(state: ResticUiState, intent: ResticUiIntent) {}

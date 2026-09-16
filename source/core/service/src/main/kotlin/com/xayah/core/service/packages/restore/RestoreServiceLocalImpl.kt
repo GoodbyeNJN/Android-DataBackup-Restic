@@ -9,10 +9,13 @@ import com.xayah.core.database.dao.PackageDao
 import com.xayah.core.database.dao.TaskDao
 import com.xayah.core.datastore.readBackupDirectory
 import com.xayah.core.datastore.readFtpResticPassword
+import com.xayah.core.datastore.readFtpResticPasswordConfigured
 import com.xayah.core.datastore.readResticPassword
 import com.xayah.core.datastore.readResticRepoPath
 import com.xayah.core.datastore.readS3ResticPassword
+import com.xayah.core.datastore.readS3ResticPasswordConfigured
 import com.xayah.core.datastore.readWebdavResticPassword
+import com.xayah.core.datastore.readWebdavResticPasswordConfigured
 import com.xayah.core.model.CloudType
 import com.xayah.core.model.DataType
 import com.xayah.core.model.OpType
@@ -405,19 +408,34 @@ internal class RestoreServiceLocalImpl @Inject constructor() : AbstractRestoreSe
         return when (cloudEntity.type) {
             CloudType.FTP -> {
                 val extra = runCatching { QUEUE_JSON.decodeFromString<FTPExtra>(cloudEntity.extra) }.getOrNull()
-                extra?.resticPassword?.takeIf { it.isNotEmpty() } ?: mContext.readFtpResticPassword()
+                when {
+                    extra?.resticPasswordConfigured == true -> extra.resticPassword
+                    mContext.readFtpResticPasswordConfigured() -> mContext.readFtpResticPassword() ?: ""
+                    else -> extra?.resticPassword?.takeIf { it.isNotEmpty() } ?: mContext.readFtpResticPassword()
+                }
             }
             CloudType.WEBDAV -> {
                 val extra = runCatching { QUEUE_JSON.decodeFromString<WebDAVExtra>(cloudEntity.extra) }.getOrNull()
-                extra?.resticPassword?.takeIf { it.isNotEmpty() } ?: mContext.readWebdavResticPassword()
+                when {
+                    extra?.resticPasswordConfigured == true -> extra.resticPassword
+                    mContext.readWebdavResticPasswordConfigured() -> mContext.readWebdavResticPassword() ?: ""
+                    else -> extra?.resticPassword?.takeIf { it.isNotEmpty() } ?: mContext.readWebdavResticPassword()
+                }
             }
             CloudType.SFTP -> {
                 val extra = runCatching { QUEUE_JSON.decodeFromString<SFTPExtra>(cloudEntity.extra) }.getOrNull()
-                extra?.resticPassword?.takeIf { it.isNotEmpty() }
+                when {
+                    extra?.resticPasswordConfigured == true -> extra.resticPassword
+                    else -> extra?.resticPassword?.takeIf { it.isNotEmpty() }
+                }
             }
             else -> {
                 val extra = runCatching { QUEUE_JSON.decodeFromString<S3Extra>(cloudEntity.extra) }.getOrNull()
-                extra?.resticPassword?.takeIf { it.isNotEmpty() } ?: mContext.readS3ResticPassword()
+                when {
+                    extra?.resticPasswordConfigured == true -> extra.resticPassword
+                    mContext.readS3ResticPasswordConfigured() -> mContext.readS3ResticPassword() ?: ""
+                    else -> extra?.resticPassword?.takeIf { it.isNotEmpty() } ?: mContext.readS3ResticPassword()
+                }
             }
         }
     }
@@ -438,7 +456,7 @@ internal class RestoreServiceLocalImpl @Inject constructor() : AbstractRestoreSe
                 // 本地
                 val repoPath = mContext.readResticRepoPath()
                 val password = mContext.readResticPassword()
-                if (repoPath.isNullOrEmpty() || password.isNullOrEmpty()) {
+                if (repoPath.isNullOrEmpty() || password == null) {
                     Log.e(mTAG, "本地 restic 配置不完整，无法解出")
                     return false
                 }
@@ -459,7 +477,7 @@ internal class RestoreServiceLocalImpl @Inject constructor() : AbstractRestoreSe
                     return false
                 }
                 val password = resolveCloudPassword(cloudEntity)
-                if (password.isNullOrEmpty()) {
+                if (password == null) {
                     Log.e(mTAG, "云端 restic 密码解析失败: ${item.accountName}")
                     return false
                 }

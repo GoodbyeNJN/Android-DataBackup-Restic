@@ -69,7 +69,9 @@ class SftpResticViewModel @Inject constructor(
 
         val sftpExtra = cloudEntity.getExtraEntity<SFTPExtra>() ?: return
         val savedPassword = sftpExtra.resticPassword
-        if (savedPassword.isNotEmpty()) {
+        val initialized = sftpExtra.resticInitialized || savedPassword.isNotEmpty()
+        if (initialized) {
+            _sftpPasswordState.value = savedPassword
             _sftpInitializationState.value = SftpInitializationState.Success(cloudEntity.remote)
             Log.d(TAG, "已从账户恢复 SFTP Restic 初始化状态: ${cloudEntity.remote}")
         }

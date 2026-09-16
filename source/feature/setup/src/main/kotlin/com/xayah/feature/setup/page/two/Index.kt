@@ -5,12 +5,14 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -71,6 +73,7 @@ fun PageTwo() {
     val notSelectedText = stringResource(id = R.string.not_selected)
 
     var password by rememberSaveable { mutableStateOf(IndexViewModel.DEFAULT_RESTIC_PASSWORD) }
+    var useNoPassword by rememberSaveable { mutableStateOf(false) }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
 
     val isInitialized = initializationState is IndexViewModel.InitializationState.ReadyToUse
@@ -89,7 +92,7 @@ fun PageTwo() {
             Button(
                 enabled = isInitialized.not() && isInitializing.not(),
                 onClick = {
-                    viewModel.emitIntentOnIO(IndexUiIntent.Initialize(password = password))
+                    viewModel.emitIntentOnIO(IndexUiIntent.Initialize(password = if (useNoPassword) "" else password))
                 }
             ) {
                 Text(text = stringResource(id = R.string.initialize))
@@ -139,7 +142,7 @@ fun PageTwo() {
                         .padding(horizontal = SizeTokens.Level24),
                     value = password,
                     onValueChange = { password = it },
-                    enabled = isInitialized.not() && isInitializing.not(),
+                    enabled = isInitialized.not() && isInitializing.not() && useNoPassword.not(),
                     label = { Text(text = stringResource(id = R.string.restic_password)) },
                     singleLine = true,
                     visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
@@ -152,6 +155,22 @@ fun PageTwo() {
                         }
                     }
                 )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .paddingHorizontal(SizeTokens.Level24)
+                ) {
+                    Checkbox(
+                        checked = useNoPassword,
+                        onCheckedChange = { checked ->
+                            useNoPassword = checked
+                            if (checked) password = ""
+                        },
+                        enabled = isInitialized.not() && isInitializing.not()
+                    )
+                    Text(text = stringResource(id = R.string.restic_no_password_init))
+                }
 
                 // 黄色 M3 警示卡片
                 Card(
@@ -168,6 +187,23 @@ fun PageTwo() {
                         text = stringResource(id = R.string.restic_password_warning),
                         color = ThemedColorSchemeKeyTokens.YellowOnPrimaryContainer.value
                     )
+                }
+                AnimatedVisibility(visible = useNoPassword) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = SizeTokens.Level24)
+                            .padding(top = SizeTokens.Level12),
+                        colors = CardDefaults.cardColors(
+                            containerColor = ThemedColorSchemeKeyTokens.YellowPrimaryContainer.value
+                        ),
+                    ) {
+                        BodyMediumText(
+                            modifier = Modifier.padding(SizeTokens.Level16),
+                            text = stringResource(id = R.string.restic_no_password_warning),
+                            color = ThemedColorSchemeKeyTokens.YellowOnPrimaryContainer.value
+                        )
+                    }
                 }
             }
 

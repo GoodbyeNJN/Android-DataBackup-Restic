@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -94,6 +95,8 @@ fun PageSFTPSetup() {
     val deleteAccountText = stringResource(id = R.string.delete_account)
     val deleteAccountDescText = stringResource(id = R.string.delete_account_desc)
     val repositoryCheckFailedText = stringResource(id = R.string.repository_check_failed)
+    val noPasswordInitTitle = stringResource(id = R.string.restic_no_password_init)
+    val noPasswordInitWarning = stringResource(id = R.string.restic_no_password_warning)
     val navController = LocalNavController.current!!
     val viewModel = hiltViewModel<IndexViewModel>()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -111,6 +114,13 @@ fun PageSFTPSetup() {
     val sftpViewModel = hiltViewModel<SftpResticViewModel>()
     val sftpInitState by sftpViewModel.sftpInitializationState.collectAsStateWithLifecycle()
     var sftpPassword by rememberSaveable(uiState.cloudEntity) { mutableStateOf(uiState.cloudEntity?.getExtraEntity<SFTPExtra>()?.resticPassword ?: "") }
+    var sftpUseNoPassword by rememberSaveable(uiState.cloudEntity) {
+        mutableStateOf(
+            uiState.cloudEntity?.getExtraEntity<SFTPExtra>()?.let {
+                it.resticPasswordConfigured && it.resticPassword.isEmpty()
+            } ?: false
+        )
+    }
     var sftpPasswordVisible by rememberSaveable { mutableStateOf(false) }
     val allFilled by rememberSaveable(
         name,
@@ -138,6 +148,8 @@ fun PageSFTPSetup() {
     LaunchedEffect(uiState.cloudEntity) {
         uiState.cloudEntity?.let { entity ->
             sftpViewModel.restoreStateFromEntity(entity)
+            val extra = entity.getExtraEntity<SFTPExtra>()
+            sftpUseNoPassword = extra?.resticPasswordConfigured == true && extra.resticPassword.isEmpty()
         }
     }
 
@@ -159,7 +171,9 @@ fun PageSFTPSetup() {
                             port = port,
                             mode = SFTPAuthMode.indexOf(modeIndex),
                             privateKey = privateKey,
-                            resticPassword = sftpPassword,
+                            resticPassword = if (sftpUseNoPassword) "" else sftpPassword,
+                            resticPasswordConfigured = true,
+                            resticInitialized = sftpInitState is SftpResticViewModel.SftpInitializationState.Success,
                         )
                         viewModel.emitIntent(IndexUiIntent.TestConnection)
                     }
@@ -177,10 +191,14 @@ fun PageSFTPSetup() {
                             name = name, remote = remote, url = url,
                             username = username, password = password, port = port,
                             mode = SFTPAuthMode.indexOf(modeIndex),
-                            privateKey = privateKey, resticPassword = sftpPassword,
+                            privateKey = privateKey,
+                            resticPassword = if (sftpUseNoPassword) "" else sftpPassword,
+                            resticPasswordConfigured = true,
+                            resticInitialized = sftpInitState is SftpResticViewModel.SftpInitializationState.Success,
                         )
                         val entity = uiState.cloudEntity
-                        val ok = entity != null && sftpViewModel.checkSftpRepository(entity, sftpPassword)
+                        val effectivePassword = if (sftpUseNoPassword) "" else sftpPassword
+                        val ok = entity != null && sftpViewModel.checkSftpRepository(entity, effectivePassword)
                         if (!ok) {
                             viewModel.emitEffect(IndexUiEffect.ShowSnackbar(
                                 message = repositoryCheckFailedText, type = SnackbarType.Error))
@@ -382,7 +400,9 @@ fun PageSFTPSetup() {
                             port = port,
                             mode = SFTPAuthMode.indexOf(modeIndex),
                             privateKey = privateKey,
-                            resticPassword = sftpPassword,
+                            resticPassword = if (sftpUseNoPassword) "" else sftpPassword,
+                            resticPasswordConfigured = true,
+                            resticInitialized = sftpInitState is SftpResticViewModel.SftpInitializationState.Success,
                         )
                         viewModel.emitIntent(IndexUiIntent.SetRemotePath(context = context))
                         remote = uiState.cloudEntity!!.remote
@@ -418,16 +438,38 @@ fun PageSFTPSetup() {
                     modifier = Modifier
                         .fillMaxWidth()
                         .paddingHorizontal(SizeTokens.Level24),
-                    enabled = uiState.isProcessing.not(),
-                    value = sftpPassword,
+                    enabled = uiState.isProcessing.not() && sftpUseNoPassword.not(),
+                    value = if (sftpUseNoPassword) "" else sftpPassword,
                     visualTransformation = if (sftpPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     leadingIcon = ImageVector.vectorResource(id = R.drawable.ic_rounded_key),
                     trailingIcon = if (sftpPasswordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
                     onTrailingIconClick = { sftpPasswordVisible = sftpPasswordVisible.not() },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    onValueChange = { sftpPassword = it },   // 账户级密码，不写全局 datastore
+                    onValueChange = { sftpPassword = it },
                     label = stringResource(id = R.string.s3_restic_password)
                 )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .paddingHorizontal(SizeTokens.Level24),
+                ) {
+                    Checkbox(
+                        checked = sftpUseNoPassword,
+                        onCheckedChange = { checked ->
+                            sftpUseNoPassword = checked
+                            if (checked) sftpPassword = ""
+                        },
+                        enabled = uiState.isProcessing.not()
+                    )
+                    Text(text = noPasswordInitTitle)
+                }
+                if (sftpUseNoPassword) {
+                    Text(
+                        modifier = Modifier.paddingHorizontal(SizeTokens.Level24),
+                        text = noPasswordInitWarning,
+                        color = ThemedColorSchemeKeyTokens.Error.value
+                    )
+                }
 
                 // 初始化状态显示
                 val initStatus = when (val state = sftpInitState) {
@@ -446,8 +488,9 @@ fun PageSFTPSetup() {
                     title = stringResource(id = R.string.s3_restic_init_status),
                     value = initStatus,
                     onClick = {
-                        if (sftpInitState is SftpResticViewModel.SftpInitializationState.Idle && sftpPassword.isNotEmpty()) {
+                        if (sftpInitState is SftpResticViewModel.SftpInitializationState.Idle) {
                             scope.launch {
+                                if (sftpUseNoPassword && !dialogState.confirm(title = noPasswordInitTitle, text = noPasswordInitWarning)) return@launch
                                 sftpViewModel.initializeSftpRepository(
                                     name = name,
                                     host = url,
@@ -455,7 +498,7 @@ fun PageSFTPSetup() {
                                     username = username,
                                     pass = password,
                                     remotePath = remote,
-                                    password = sftpPassword,
+                                    password = if (sftpUseNoPassword) "" else sftpPassword,
                                     mode = SFTPAuthMode.indexOf(modeIndex),
                                     privateKey = privateKey,
                                 )
@@ -470,11 +513,11 @@ fun PageSFTPSetup() {
                         .fillMaxWidth()
                         .paddingHorizontal(SizeTokens.Level24),
                     enabled = uiState.isProcessing.not() &&
-                            sftpPassword.isNotEmpty() &&
                             remote.isNotEmpty() &&
                             sftpInitState !is SftpResticViewModel.SftpInitializationState.Initializing,
                     onClick = {
                         scope.launch {
+                            if (sftpUseNoPassword && !dialogState.confirm(title = noPasswordInitTitle, text = noPasswordInitWarning)) return@launch
                             sftpViewModel.initializeSftpRepository(
                                 name = name,
                                 host = url,
@@ -482,7 +525,7 @@ fun PageSFTPSetup() {
                                 username = username,
                                 pass = password,
                                 remotePath = remote,
-                                password = sftpPassword,
+                                password = if (sftpUseNoPassword) "" else sftpPassword,
                                 mode = SFTPAuthMode.indexOf(modeIndex),
                                 privateKey = privateKey,
                             )

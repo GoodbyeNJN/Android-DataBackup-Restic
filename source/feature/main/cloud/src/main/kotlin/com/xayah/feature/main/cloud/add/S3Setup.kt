@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Visibility
@@ -13,6 +14,7 @@ import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -79,6 +81,8 @@ fun PageS3Setup() {
     val deleteAccountText = stringResource(id = R.string.delete_account)
     val deleteAccountDescText = stringResource(id = R.string.delete_account_desc)
     val repositoryCheckFailedText = stringResource(id = R.string.repository_check_failed)
+    val noPasswordInitTitle = stringResource(id = R.string.restic_no_password_init)
+    val noPasswordInitWarning = stringResource(id = R.string.restic_no_password_warning)
     val navController = LocalNavController.current!!
     val viewModel = hiltViewModel<IndexViewModel>()
     val s3ViewModel = hiltViewModel<S3ResticViewModel>()
@@ -88,6 +92,7 @@ fun PageS3Setup() {
     val scope = rememberCoroutineScope()
 
     var s3Password by rememberSaveable { mutableStateOf("") }
+    var s3UseNoPassword by rememberSaveable(uiState.cloudEntity) { mutableStateOf(false) }
     var s3PasswordVisible by rememberSaveable { mutableStateOf(false) }
 
     val s3InitState by s3ViewModel.s3InitializationState.collectAsStateWithLifecycle()
@@ -169,6 +174,8 @@ fun PageS3Setup() {
     LaunchedEffect(uiState.cloudEntity) {
         uiState.cloudEntity?.let { entity ->
             s3ViewModel.restoreStateFromEntity(entity)
+            val extra = entity.getExtraEntity<S3Extra>()
+            s3UseNoPassword = extra?.resticPasswordConfigured == true && extra.resticPassword.isEmpty()
         }
     }
 
@@ -192,7 +199,9 @@ fun PageS3Setup() {
                             endpoint = endpoint,
                             protocol = if (protocolIndex == 0) S3Protocol.HTTPS else S3Protocol.HTTP,
                             networkType = if (networkTypeIndex == 0) S3NetworkType.PUBLIC else S3NetworkType.PRIVATE,
-                            resticPassword = s3Password,
+                            resticPassword = if (s3UseNoPassword) "" else s3Password,
+                            resticPasswordConfigured = true,
+                            resticInitialized = s3InitState is S3ResticViewModel.S3InitializationState.Success,
                         )
                         viewModel.emitIntent(IndexUiIntent.TestConnection)
                     }
@@ -211,10 +220,13 @@ fun PageS3Setup() {
                             bucket = bucket, endpoint = endpoint,
                             protocol = if (protocolIndex == 0) S3Protocol.HTTPS else S3Protocol.HTTP,
                             networkType = if (networkTypeIndex == 0) S3NetworkType.PUBLIC else S3NetworkType.PRIVATE,
-                            resticPassword = s3Password,
+                            resticPassword = if (s3UseNoPassword) "" else s3Password,
+                            resticPasswordConfigured = true,
+                            resticInitialized = s3InitState is S3ResticViewModel.S3InitializationState.Success,
                         )
                         val entity = uiState.cloudEntity
-                        val ok = entity != null && s3ViewModel.checkS3Repository(entity, s3Password)
+                        val effectivePassword = if (s3UseNoPassword) "" else s3Password
+                        val ok = entity != null && s3ViewModel.checkS3Repository(entity, effectivePassword)
                         if (!ok) {
                             viewModel.emitEffect(IndexUiEffect.ShowSnackbar(
                                 message = repositoryCheckFailedText, type = SnackbarType.Error))
@@ -382,7 +394,9 @@ fun PageS3Setup() {
                             endpoint = endpoint,
                             protocol = if (protocolIndex == 0) S3Protocol.HTTPS else S3Protocol.HTTP,
                             networkType = if (networkTypeIndex == 0) S3NetworkType.PUBLIC else S3NetworkType.PRIVATE,
-                            resticPassword = s3Password,
+                            resticPassword = if (s3UseNoPassword) "" else s3Password,
+                            resticPasswordConfigured = true,
+                            resticInitialized = s3InitState is S3ResticViewModel.S3InitializationState.Success,
                         )
                         viewModel.emitIntent(IndexUiIntent.SetRemotePath(context = context))
                         remote = uiState.cloudEntity!!.remote
@@ -419,8 +433,8 @@ fun PageS3Setup() {
                         modifier = Modifier
                             .fillMaxWidth()
                             .paddingHorizontal(SizeTokens.Level24),
-                        enabled = uiState.isProcessing.not(),
-                        value = s3Password,
+                        enabled = uiState.isProcessing.not() && s3UseNoPassword.not(),
+                        value = if (s3UseNoPassword) "" else s3Password,
                         visualTransformation = if (s3PasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         leadingIcon = ImageVector.vectorResource(id = R.drawable.ic_rounded_key),
                         trailingIcon = if (s3PasswordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
@@ -434,6 +448,31 @@ fun PageS3Setup() {
                         },
                         label = stringResource(id = R.string.s3_restic_password)
                     )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .paddingHorizontal(SizeTokens.Level24),
+                    ) {
+                        Checkbox(
+                            checked = s3UseNoPassword,
+                            onCheckedChange = { checked ->
+                                s3UseNoPassword = checked
+                                if (checked) {
+                                    s3Password = ""
+                                    s3ViewModel.saveS3Password("")
+                                }
+                            },
+                            enabled = uiState.isProcessing.not()
+                        )
+                        Text(text = noPasswordInitTitle)
+                    }
+                    if (s3UseNoPassword) {
+                        Text(
+                            modifier = Modifier.paddingHorizontal(SizeTokens.Level24),
+                            text = noPasswordInitWarning,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
 
                     // 初始化状态显示
                     val initStatus = when (val state = s3InitState) {
@@ -458,8 +497,9 @@ fun PageS3Setup() {
                         title = stringResource(id = R.string.s3_restic_init_status),
                         value = initStatus,
                         onClick = {
-                            if (s3InitState is S3ResticViewModel.S3InitializationState.Idle && s3Password.isNotEmpty()) {
+                            if (s3InitState is S3ResticViewModel.S3InitializationState.Idle) {
                                 scope.launch {
+                                    if (s3UseNoPassword && !dialogState.confirm(title = noPasswordInitTitle, text = noPasswordInitWarning)) return@launch
                                     // 构建S3Extra对象
                                     val s3Extra = S3Extra(
                                         type = "S3",
@@ -471,7 +511,8 @@ fun PageS3Setup() {
                                         protocol = if (protocolIndex == 0) S3Protocol.HTTPS else S3Protocol.HTTP,
                                         networkType = if (networkTypeIndex == 0) S3NetworkType.PUBLIC else S3NetworkType.PRIVATE
                                     )
-                                    s3ViewModel.initializeS3Repository(s3Extra, remote, s3Password)
+                                    val effectivePassword = if (s3UseNoPassword) "" else s3Password
+                                    s3ViewModel.initializeS3Repository(s3Extra, remote, effectivePassword)
                                 }
                             }
                         }
@@ -483,10 +524,10 @@ fun PageS3Setup() {
                             .fillMaxWidth()
                             .paddingHorizontal(SizeTokens.Level24),
                         enabled = uiState.isProcessing.not() &&
-                                s3Password.isNotEmpty() &&
                                 s3InitState !is S3ResticViewModel.S3InitializationState.Initializing,
                         onClick = {
                             scope.launch {
+                                if (s3UseNoPassword && !dialogState.confirm(title = noPasswordInitTitle, text = noPasswordInitWarning)) return@launch
                                 // 构建完整的S3Extra对象
                                 val s3Extra = S3Extra(
                                     type = "S3",
@@ -500,7 +541,8 @@ fun PageS3Setup() {
                                 )
 
                                 // 调用初始化方法
-                                s3ViewModel.initializeS3Repository(s3Extra, remote, s3Password)
+                                val effectivePassword = if (s3UseNoPassword) "" else s3Password
+                                s3ViewModel.initializeS3Repository(s3Extra, remote, effectivePassword)
                             }
                         }
                     ) {

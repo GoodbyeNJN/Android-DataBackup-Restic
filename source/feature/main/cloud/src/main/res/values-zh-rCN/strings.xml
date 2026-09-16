@@ -9,6 +9,8 @@
     <string name="s3_restic_init_failed">初始化失败: %s</string>
     <string name="s3_restic_init_status">初始化状态</string>
     <string name="s3_restic_initialize">初始化</string>
+    <string name="restic_no_password_init">使用空密码初始化</string>
+    <string name="restic_no_password_warning">空密码意味着仓库无加密凭证保护，任何可访问仓库的人都可能读取备份数据。</string>
     <!-- 仓库检查 -->
     <string name="repository_check_failed">仓库检查失败，请确认远程路径与密码</string>
     <!-- FTP 公网 IP 警示 -->

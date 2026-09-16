@@ -36,6 +36,7 @@ import com.xayah.core.restic.ResticRepository
 import com.xayah.core.restic.ResticRepository.ResticProgressCallback
 import com.xayah.core.datastore.readResticRepoPath
 import com.xayah.core.datastore.readResticPassword
+import com.xayah.core.datastore.readResticPasswordConfigured
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
@@ -203,8 +204,9 @@ internal abstract class AbstractBackupService : AbstractPackagesService() {
 
     // Restic 辅助方法：生成密码
     protected suspend fun getResticPassword(): String {
-        // 从 DataStore 读取用户配置的密码，如果没有则使用默认值
-        return mContext.readResticPassword() ?: "databackup_${mBackupTimestamp}"
+        // 从 DataStore 读取用户配置的密码；若用户明确配置为空，则返回空密码
+        val configured = mContext.readResticPasswordConfigured()
+        return if (configured) (mContext.readResticPassword() ?: "") else (mContext.readResticPassword() ?: "databackup_${mBackupTimestamp}")
     }
 
     // Restic 辅助方法：更新数据库中的快照信息（存根）

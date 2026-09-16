@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -15,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -82,6 +84,8 @@ fun PageFTPSetup() {
     val deleteAccountText = stringResource(id = R.string.delete_account)
     val deleteAccountDescText = stringResource(id = R.string.delete_account_desc)
     val repositoryCheckFailedText = stringResource(id = R.string.repository_check_failed)
+    val noPasswordInitTitle = stringResource(id = R.string.restic_no_password_init)
+    val noPasswordInitWarning = stringResource(id = R.string.restic_no_password_warning)
     val navController = LocalNavController.current!!
     val viewModel = hiltViewModel<IndexViewModel>()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -90,6 +94,7 @@ fun PageFTPSetup() {
     val scope = rememberCoroutineScope()
 
     var ftpPassword by rememberSaveable { mutableStateOf("") }
+    var ftpUseNoPassword by rememberSaveable(uiState.cloudEntity) { mutableStateOf(false) }
     var ftpPasswordVisible by rememberSaveable { mutableStateOf(false) }
 
     val ftpInitState by ftpViewModel.ftpInitializationState.collectAsStateWithLifecycle()
@@ -123,6 +128,8 @@ fun PageFTPSetup() {
     LaunchedEffect(uiState.cloudEntity) {
         uiState.cloudEntity?.let { entity ->
             ftpViewModel.restoreStateFromEntity(entity)
+            val extra = entity.getExtraEntity<FTPExtra>()
+            ftpUseNoPassword = extra?.resticPasswordConfigured == true && extra.resticPassword.isEmpty()
         }
     }
 
@@ -138,7 +145,9 @@ fun PageFTPSetup() {
                         viewModel.updateFTPEntity(
                             name = name, remote = remote, url = url,
                             username = username, password = password, port = port,
-                            resticPassword = ftpPassword,
+                            resticPassword = if (ftpUseNoPassword) "" else ftpPassword,
+                            resticPasswordConfigured = true,
+                            resticInitialized = ftpInitState is FtpResticViewModel.FtpInitializationState.Success,
                         )
                         viewModel.emitIntent(IndexUiIntent.TestConnection)
                     }
@@ -155,10 +164,13 @@ fun PageFTPSetup() {
                         viewModel.updateFTPEntity(
                             name = name, remote = remote, url = url,
                             username = username, password = password, port = port,
-                            resticPassword = ftpPassword,
+                            resticPassword = if (ftpUseNoPassword) "" else ftpPassword,
+                            resticPasswordConfigured = true,
+                            resticInitialized = ftpInitState is FtpResticViewModel.FtpInitializationState.Success,
                         )
                         val entity = uiState.cloudEntity
-                        val ok = entity != null && ftpViewModel.checkFtpRepository(entity, ftpPassword)
+                        val effectivePassword = if (ftpUseNoPassword) "" else ftpPassword
+                        val ok = entity != null && ftpViewModel.checkFtpRepository(entity, effectivePassword)
                         if (!ok) {
                             viewModel.emitEffect(IndexUiEffect.ShowSnackbar(
                                 message = repositoryCheckFailedText, type = SnackbarType.Error))
@@ -301,7 +313,9 @@ fun PageFTPSetup() {
                         viewModel.updateFTPEntity(
                             name = name, remote = remote, url = url,
                             username = username, password = password, port = port,
-                            resticPassword = ftpPassword,
+                            resticPassword = if (ftpUseNoPassword) "" else ftpPassword,
+                            resticPasswordConfigured = true,
+                            resticInitialized = ftpInitState is FtpResticViewModel.FtpInitializationState.Success,
                         )
                         viewModel.emitIntent(IndexUiIntent.SetRemotePath(context = context))
                         remote = uiState.cloudEntity!!.remote
@@ -337,8 +351,8 @@ fun PageFTPSetup() {
                     modifier = Modifier
                         .fillMaxWidth()
                         .paddingHorizontal(SizeTokens.Level24),
-                    enabled = uiState.isProcessing.not(),
-                    value = ftpPassword,
+                    enabled = uiState.isProcessing.not() && ftpUseNoPassword.not(),
+                    value = if (ftpUseNoPassword) "" else ftpPassword,
                     visualTransformation = if (ftpPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     leadingIcon = ImageVector.vectorResource(id = R.drawable.ic_rounded_key),
                     trailingIcon = if (ftpPasswordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
@@ -352,6 +366,31 @@ fun PageFTPSetup() {
                     },
                     label = stringResource(id = R.string.s3_restic_password)
                 )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .paddingHorizontal(SizeTokens.Level24),
+                ) {
+                    Checkbox(
+                        checked = ftpUseNoPassword,
+                        onCheckedChange = { checked ->
+                            ftpUseNoPassword = checked
+                            if (checked) {
+                                ftpPassword = ""
+                                ftpViewModel.saveFtpPassword("")
+                            }
+                        },
+                        enabled = uiState.isProcessing.not()
+                    )
+                    Text(text = noPasswordInitTitle)
+                }
+                if (ftpUseNoPassword) {
+                    Text(
+                        modifier = Modifier.paddingHorizontal(SizeTokens.Level24),
+                        text = noPasswordInitWarning,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
 
                 // 初始化状态显示
                 val initStatus = when (val state = ftpInitState) {
@@ -376,8 +415,9 @@ fun PageFTPSetup() {
                     title = stringResource(id = R.string.s3_restic_init_status),
                     value = initStatus,
                     onClick = {
-                        if (ftpInitState is FtpResticViewModel.FtpInitializationState.Idle && ftpPassword.isNotEmpty()) {
+                        if (ftpInitState is FtpResticViewModel.FtpInitializationState.Idle) {
                             scope.launch {
+                                if (ftpUseNoPassword && !dialogState.confirm(title = noPasswordInitTitle, text = noPasswordInitWarning)) return@launch
                                 ftpViewModel.initializeFtpRepository(
                                     name = name,
                                     host = url,
@@ -385,7 +425,7 @@ fun PageFTPSetup() {
                                     username = username,
                                     pass = password,
                                     remotePath = remote,
-                                    password = ftpPassword
+                                    password = if (ftpUseNoPassword) "" else ftpPassword
                                 )
                             }
                         }
@@ -398,10 +438,10 @@ fun PageFTPSetup() {
                         .fillMaxWidth()
                         .paddingHorizontal(SizeTokens.Level24),
                     enabled = uiState.isProcessing.not() &&
-                            ftpPassword.isNotEmpty() &&
                             ftpInitState !is FtpResticViewModel.FtpInitializationState.Initializing,
                     onClick = {
                         scope.launch {
+                            if (ftpUseNoPassword && !dialogState.confirm(title = noPasswordInitTitle, text = noPasswordInitWarning)) return@launch
                             ftpViewModel.initializeFtpRepository(
                                 name = name,
                                 host = url,
@@ -409,7 +449,7 @@ fun PageFTPSetup() {
                                 username = username,
                                 pass = password,
                                 remotePath = remote,
-                                password = ftpPassword
+                                password = if (ftpUseNoPassword) "" else ftpPassword
                             )
                         }
                     }

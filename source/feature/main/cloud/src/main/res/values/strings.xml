@@ -9,6 +9,8 @@
     <string name="s3_restic_init_failed">Initialization Failed: %s</string>
     <string name="s3_restic_init_status">Initialization Status</string>
     <string name="s3_restic_initialize">Initialize</string>
+    <string name="restic_no_password_init">Initialize without password</string>
+    <string name="restic_no_password_warning">No password means your repository is not protected by encryption credentials; anyone with repository access may read backup data.</string>
     <!-- Repository Check -->
     <string name="repository_check_failed">Repository check failed. Please verify the remote path and password.</string>
     <!-- FTP Public IP Warning -->

@@ -7,9 +7,13 @@ import com.xayah.core.data.repository.PackageRepository
 import com.xayah.core.data.repository.TaskRepository
 import com.xayah.core.datastore.readFtpResticPassword
 import com.xayah.core.datastore.readResticPassword
+import com.xayah.core.datastore.readResticPasswordConfigured
 import com.xayah.core.datastore.readResticRepoPath
 import com.xayah.core.datastore.readS3ResticPassword
+import com.xayah.core.datastore.readS3ResticPasswordConfigured
 import com.xayah.core.datastore.readWebdavResticPassword
+import com.xayah.core.datastore.readWebdavResticPasswordConfigured
+import com.xayah.core.datastore.readFtpResticPasswordConfigured
 import com.xayah.core.datastore.saveCloudActivatedAccountName
 import com.xayah.core.model.CloudType
 import com.xayah.core.model.OpType
@@ -107,18 +111,34 @@ class BackupViewModelImpl @Inject constructor(
                         val entity = state.cloudEntity!!
                         // 密码解析：优先取账户 extra 里的 resticPassword，为空回退到对应 datastore，
                         // 解析方式与服务层 BackupServiceCloudImpl.backupWithResticToXxx 保持一致。
-                        val extraPassword = when (entity.type) {
-                            CloudType.FTP -> entity.getExtraEntity<FTPExtra>()?.resticPassword
-                            CloudType.WEBDAV -> entity.getExtraEntity<WebDAVExtra>()?.resticPassword
-                            CloudType.SFTP -> entity.getExtraEntity<SFTPExtra>()?.resticPassword
-                            else -> entity.getExtraEntity<S3Extra>()?.resticPassword
-                        } ?: ""
-                        val password = extraPassword.ifEmpty {
-                            when (entity.type) {
-                                CloudType.FTP -> mContext.readFtpResticPassword() ?: ""
-                                CloudType.WEBDAV -> mContext.readWebdavResticPassword() ?: ""
-                                CloudType.SFTP -> ""
-                                else -> mContext.readS3ResticPassword() ?: ""
+                        val password = when (entity.type) {
+                            CloudType.FTP -> {
+                                val extra = entity.getExtraEntity<FTPExtra>()
+                                when {
+                                    extra?.resticPasswordConfigured == true -> extra.resticPassword
+                                    mContext.readFtpResticPasswordConfigured() -> mContext.readFtpResticPassword() ?: ""
+                                    else -> extra?.resticPassword?.ifEmpty { mContext.readFtpResticPassword() ?: "" } ?: (mContext.readFtpResticPassword() ?: "")
+                                }
+                            }
+                            CloudType.WEBDAV -> {
+                                val extra = entity.getExtraEntity<WebDAVExtra>()
+                                when {
+                                    extra?.resticPasswordConfigured == true -> extra.resticPassword
+                                    mContext.readWebdavResticPasswordConfigured() -> mContext.readWebdavResticPassword() ?: ""
+                                    else -> extra?.resticPassword?.ifEmpty { mContext.readWebdavResticPassword() ?: "" } ?: (mContext.readWebdavResticPassword() ?: "")
+                                }
+                            }
+                            CloudType.SFTP -> {
+                                val extra = entity.getExtraEntity<SFTPExtra>()
+                                if (extra?.resticPasswordConfigured == true) extra.resticPassword else (extra?.resticPassword ?: "")
+                            }
+                            else -> {
+                                val extra = entity.getExtraEntity<S3Extra>()
+                                when {
+                                    extra?.resticPasswordConfigured == true -> extra.resticPassword
+                                    mContext.readS3ResticPasswordConfigured() -> mContext.readS3ResticPassword() ?: ""
+                                    else -> extra?.resticPassword?.ifEmpty { mContext.readS3ResticPassword() ?: "" } ?: (mContext.readS3ResticPassword() ?: "")
+                                }
                             }
                         }
                         val repoOk = when (entity.type) {
@@ -157,7 +177,8 @@ class BackupViewModelImpl @Inject constructor(
                         // ===== 本地仓库前置检查（fail-fast）=====
                         val repoPath = mContext.readResticRepoPath()
                             ?: File(mContext.filesDir, "restic_repo").absolutePath
-                        val password = mContext.readResticPassword() ?: "databackup_default"
+                        val configured = mContext.readResticPasswordConfigured()
+                        val password = if (configured) (mContext.readResticPassword() ?: "") else (mContext.readResticPassword() ?: "databackup_default")
                         val ok = resticRepo.verifyRepository(repoPath, password)
                         if (!ok) {
                             emitEffect(IndexUiEffect.DismissSnackbar)
